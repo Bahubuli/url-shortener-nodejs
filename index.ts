@@ -6,6 +6,7 @@ import prisma from './prisma';
 import { requestLogger } from './middleware/requestLogger';
 import { apiKeyValidator } from './middleware/apiKeyValidator';
 import { enterpriseValidator } from './middleware/enterpriseValidator';
+import { blacklistValidator } from './middleware/blacklistValidator';
 
 // Extend Express Request type to include user
 declare global {
@@ -21,7 +22,7 @@ export const app = express();
 // Global Middleware
 app.use(json());
 app.use(urlencoded({ extended: true }));
-
+app.use(blacklistValidator)
 app.get('/health', async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
