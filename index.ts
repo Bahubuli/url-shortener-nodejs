@@ -1,10 +1,23 @@
-import bcrypt from 'bcryptjs';
-import { isValid, parse } from 'date-fns';
+import { Request as ExpressRequest } from 'express';
 import express, { json, urlencoded } from 'express';
+import { parse, isValid } from 'date-fns';
+import bcrypt from 'bcryptjs';
 import prisma from './prisma';
+import { requestLogger } from './middleware/requestLogger';
+import { apiKeyValidator } from './middleware/apiKeyValidator';
+
+// Extend Express Request type to include user
+declare global {
+  namespace Express {
+    interface Request {
+      user?: any;
+    }
+  }
+}
 
 export const app = express();
 
+// Global Middleware
 app.use(json());
 app.use(urlencoded({ extended: true }));
 
@@ -22,10 +35,10 @@ app.get('/health', async (req, res) => {
       success: false,
       message: 'Something went wrong.',
     });
-  }
-});
+  } 
+}); 
 
-app.post('/shorten', async (req, res) => {
+app.post('/shorten', requestLogger, apiKeyValidator, async (req, res) => {
   const { url, expiryDate, code, password } = req.body;
   if (!url) {
     res.status(400).json({
@@ -36,27 +49,7 @@ app.post('/shorten', async (req, res) => {
     return;
   }
 
-  const apiKey = req.headers['x-api-key'] as string;
-  if (!apiKey) {
-    res.status(401).json({
-      success: false,
-      message: 'Missing API key',
-      data: null,
-    });
-    return;
-  }
-
   try {
-    const user = await prisma.users.findUnique({ where: { api_key: apiKey } });
-    if (!user) {
-      res.status(403).json({
-        success: false,
-        message: 'Invalid API key',
-        data: null,
-      });
-      return;
-    }
-
     let expriryDateObj: Date | undefined = undefined;
 
     if (expiryDate) {
@@ -100,13 +93,13 @@ app.post('/shorten', async (req, res) => {
     let hashedPassword: string | undefined = undefined;
     if (password) {
       hashedPassword = await bcrypt.hash(password, 10);
-    }
-
+    }    
+    
     const newUrl = await prisma.shortened_urls.create({
       data: {
         original_url: url,
         short_code: shortCode,
-        user_id: user.id,
+        user_id: req.user.id,
         expiry_date: expriryDateObj,
         password: hashedPassword,
       },
@@ -125,7 +118,7 @@ app.post('/shorten', async (req, res) => {
   }
 });
 
-app.post('/shorten/batch', async (req, res) => {
+app.post('/shorten/batch', requestLogger, async (req, res) => {
   const { urls } = req.body;
 
   if (!Array.isArray(urls) || urls.length === 0) {
@@ -211,7 +204,7 @@ app.post('/shorten/batch', async (req, res) => {
   });
 });
 
-app.get('/redirect', async (req, res) => {
+app.get('/redirect', requestLogger, async (req, res) => {
   const { code } = req.query;
   const inputPassword = req.query.password as string | undefined;
 
