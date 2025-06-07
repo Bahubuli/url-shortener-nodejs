@@ -7,6 +7,7 @@ import { requestLogger } from './middleware/requestLogger';
 import { apiKeyValidator } from './middleware/apiKeyValidator';
 import { enterpriseValidator } from './middleware/enterpriseValidator';
 import { blacklistValidator } from './middleware/blacklistValidator';
+import { responseTimeLogger } from './middleware/responseTimeLogger';
 
 // Extend Express Request type to include user
 declare global {
@@ -20,6 +21,7 @@ declare global {
 export const app = express();
 
 // Global Middleware
+app.use(responseTimeLogger); // Add this as early as possible to get accurate timing
 app.use(json());
 app.use(urlencoded({ extended: true }));
 app.use(blacklistValidator)
