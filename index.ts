@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import prisma from './prisma';
 import { requestLogger } from './middleware/requestLogger';
 import { apiKeyValidator } from './middleware/apiKeyValidator';
+import { enterpriseValidator } from './middleware/enterpriseValidator';
 
 // Extend Express Request type to include user
 declare global {
@@ -118,7 +119,7 @@ app.post('/shorten', requestLogger, apiKeyValidator, async (req, res) => {
   }
 });
 
-app.post('/shorten/batch', requestLogger, async (req, res) => {
+app.post('/shorten/batch', requestLogger, apiKeyValidator, enterpriseValidator, async (req, res) => {
   const { urls } = req.body;
 
   if (!Array.isArray(urls) || urls.length === 0) {
@@ -129,36 +130,6 @@ app.post('/shorten/batch', requestLogger, async (req, res) => {
     });
     return;
   }
-
-  const apiKey = req.headers['x-api-key'] as string;
-  if (!apiKey) {
-    res.status(401).json({
-      success: false,
-      message: 'Missing API key',
-      data: null,
-    });
-    return;
-  }
-
-  const user = await prisma.users.findUnique({ where: { api_key: apiKey } });
-  if (!user) {
-    res.status(403).json({
-      success: false,
-      message: 'Invalid API key',
-      data: null,
-    });
-    return;
-  }
-
-  if (user.tier !== 'enterprise') {
-    res.status(403).json({
-      success: false,
-      message: 'Bulk URL shortening is only available for enterprise users.',
-      data: null,
-    });
-    return;
-  }
-
   const results = await Promise.all(
     urls.map(async (url) => {
       if (!url) {
@@ -176,7 +147,7 @@ app.post('/shorten/batch', requestLogger, async (req, res) => {
           data: {
             original_url: url,
             short_code: shortCode,
-            user_id: user.id,
+            user_id: req.user.id,
           },
         });
 
